@@ -8,6 +8,7 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 import tap.core.*;
+import tap.formats.sample.SampleRec;
 
 public class WordCount extends Configured implements Tool {
 
@@ -31,7 +32,7 @@ public class WordCount extends Configured implements Tool {
         }
 
         Pipe input = new Pipe(o.input).stringFormat();
-        Pipe counts = new Pipe(o.output);
+        Pipe counts = new Pipe(o.output).sampleFormat();
         wordcount.produces(counts);
         
         Phase count = new Phase().reads(input).writes(counts).map(Mapper.class).
@@ -67,10 +68,10 @@ public class WordCount extends Configured implements Tool {
         }        
     }
 
-    public static class Reducer extends BaseReducer<CountRec,CountRec> {
+    public static class Reducer extends BaseReducer<CountRec,SampleRec> {
 
         @Override
-        public void reduce(Iterable<CountRec> in, CountRec out, TapContext<CountRec> context) {
+        public void reduce(Iterable<CountRec> in, SampleRec out, TapContext<SampleRec> context) {
             out.count = 0;
             for (CountRec rec : in) {
                 out.word = rec.word;

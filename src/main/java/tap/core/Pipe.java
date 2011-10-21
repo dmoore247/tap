@@ -22,9 +22,13 @@ package tap.core;
 import java.io.IOException;
 
 import org.apache.avro.mapred.*;
+import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.mapred.*;
+
+import tap.formats.sample.SampleOutputFormat;
+import tap.formats.sample.SampleRec;
 
 @SuppressWarnings("deprecation")
 public class Pipe<T> {
@@ -69,6 +73,18 @@ public class Pipe<T> {
             @Override
             public void setupInput(JobConf conf) {
                 conf.setInputFormat(AvroInputFormat.class);        
+            }
+        },
+        SAMPLE_FORMAT {
+            @Override
+            public void setupOutput(JobConf conf) {
+                conf.setOutputFormat(SampleOutputFormat.class);
+                conf.setOutputKeyClass(SampleRec.class);
+            }
+            
+            @Override
+            public void setupInput(JobConf conf) {
+                throw new NotImplementedException();
             }
         };
 
@@ -207,6 +223,11 @@ public class Pipe<T> {
 
     public Pipe avroFormat() {
         this.format = Formats.AVRO_FORMAT;
+        return this;
+    }
+    
+    public Pipe sampleFormat() {
+        this.format = Formats.SAMPLE_FORMAT;
         return this;
     }
     
