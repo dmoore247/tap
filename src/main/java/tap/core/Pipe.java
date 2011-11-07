@@ -15,15 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  * 
- * Copyright 2010 Think Big Analytics. All Rights Reserved.
+ * Copyright 2011 Think Big Analytics. All Rights Reserved.
  */
 package tap.core;
 
 import tap.compression.Compressions;
 import tap.formats.*;
 import tap.util.ObjectFactory;
+import tap.util.ReflectUtils;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.util.Iterator;
 
 import org.apache.avro.mapred.AvroValue;
@@ -35,61 +38,42 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 
 @SuppressWarnings("deprecation")
-public class Pipe<T> implements Iterable<T>, Iterator<T> {
+public class Pipe<T> extends TapPipe<T> implements Iterable<T>, Iterator<T> {
 
     private TapContext<T> context; // for OutPipe
     private Iterator<AvroValue<T>> values;    // for InPipe
-	private Phase producer;
-	private String path;
-	private T prototype;
-	private Formats format = Formats.AVRO_FORMAT;
-	private boolean isCompressed = false;
-	private String uncompressedPath;
-	private Compressions compression = null;
+    Formats format = Formats.UNKNOWN_FORMAT;
+    Phase producer;
+    protected String path;
+    protected T prototype;
+    String uncompressedPath;
+    protected Compressions compression = null;
+    protected boolean isCompressed = false;
+    
+    public static <T> Pipe<T> of(Class<? extends T> ofClass) {
+        try {
+            return new Pipe<T>(ObjectFactory.newInstance(ofClass));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
+    public static <T> Pipe<T> of(T prototype) {
+        return new Pipe<T>(prototype);
+    }
+    
 	@Deprecated
 	public Pipe(T prototype) {
 		this.prototype = prototype;
+		init();
 	}
 
-	public Pipe(String path) {
+	@SuppressWarnings("unchecked")
+    public Pipe(String path) {
 	    setPath(path);
 	}
 
-    private void setPath(String path) {
-		this.path = path;
-
-		determineCompression();
-		determineFormat();
-	}
-
-	private void determineCompression() {
-        if (this.path.endsWith(Compressions.GZIP_COMPRESSION.fileExtension())) {
-            this.isCompressed = true;
-            setCompression(Compressions.GZIP_COMPRESSION);
-            this.uncompressedPath = this.path.replaceAll(".gz$", "");
-        } else {
-            this.uncompressedPath = path;
-        }
-	}
-
-	/*
-	 * determine pipe's format based on file extension and configure pipe
-	 * automatically
-	 */
-	private void determineFormat() {
-		for (Formats f : Formats.values()) {
-			if (f.getFileFormat().matches(this.uncompressedPath)) {
-				f.getFileFormat().setPipeFormat(this);
-				break;
-			}
-		}
-		if (this.getFormat().equals(Formats.UNKNOWN_FORMAT)) {
-			// open file, read first couple lines
-		}
-	}
-	
-	/*
+    /*
 	 * Probe HDFS to determine if this.path exists.
 	 */
 	public boolean exists(Configuration conf) {
@@ -141,31 +125,6 @@ public class Pipe<T> implements Iterable<T>, Iterator<T> {
 		}
 	}
 
-	public Phase getProducer() {
-		return producer;
-	}
-
-	public void setProducer(Phase producer) {
-		this.producer = producer;
-	}
-
-	public String getPath() {
-		return path;
-	}
-
-	/*
-	 * Set pipe's path.
-	 */
-	public Pipe<T> at(String path) {
-	    setPath(path);
-		return this;
-	}
-
-	@Override
-	public String toString() {
-		return path + ":" + super.toString();
-	}
-
 	/**
 	 * 
 	 * @param conf
@@ -194,29 +153,6 @@ public class Pipe<T> implements Iterable<T>, Iterator<T> {
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-	}
-
-	public static <T> Pipe<T> of(Class<? extends T> ofClass) {
-        try {
-            return new Pipe<T>(ObjectFactory.newInstance(ofClass));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-	/*
-	 * Construct new Pipe<T> and set pipe's prototype.
-	 */
-	public static <T> Pipe<T> of(T prototype) {
-		return new Pipe<T>(prototype);
-	}
-
-	public T getPrototype() {
-		return prototype;
-	}
-
-	public void setPrototype(T prototype) {
-		this.prototype = prototype;
 	}
 
 	public void delete(JobConf conf) {
@@ -251,13 +187,6 @@ public class Pipe<T> implements Iterable<T>, Iterator<T> {
     	return this;
     }
 
-    public Pipe<T> setCompression(Compressions compression) {
-    	this.isCompressed = true;
-    	this.compression = compression;
-    	return this;
-    	
-    }
-    
     public Compressions getCompression() {
     	return this.compression;
     }	
@@ -324,19 +253,7 @@ public class Pipe<T> implements Iterable<T>, Iterator<T> {
 		return result;
 	}
 
-	public Formats getFormat() {
-		return format;
-	}
-
-	public void setFormat(Formats format) {
-		this.format = format;
-	}
-
-    public boolean isCompressed() {
-        return isCompressed;
-    }
-
-    /**
+	/**
      * Turn on/off the Pipe's compression
      * @param isCompressed true if compression is to be used
      * @return this
@@ -407,5 +324,111 @@ public class Pipe<T> implements Iterable<T>, Iterator<T> {
      */
     public void put(T out) {
         this.context.write(out);
+    }
+
+    public Phase getProducer() {
+    	return producer;
+    }
+
+    public void setProducer(Phase producer) {
+    	this.producer = producer;
+    }
+
+    public String getPath() {
+    	return path;
+    }
+
+    public Pipe<T> at(String path) {
+        setPath(path);
+    	return this;
+    }
+
+    @Override
+    public String toString() {
+    	return path + ":" + super.toString();
+    }
+
+    public T getPrototype() {
+    	return prototype;
+    }
+
+    public void setPrototype(T prototype) {
+    	this.prototype = prototype;
+    }
+
+    public Formats getFormat() {
+    	return format;
+    }
+
+    public void setFormat(Formats format) {
+    	this.format = format;
+    }
+
+    public String getUncompressedPath() {
+        return uncompressedPath;
+    }
+
+    protected void setUncompressedPath(String uncompressedPath) {
+        this.uncompressedPath = uncompressedPath;
+    }
+
+    protected void setPath(String path) {
+    	this.path = path;
+    
+    	init();
+    }
+
+    protected void determineFormat() {
+        
+        if (this.prototype != null && this.prototype instanceof com.google.protobuf.GeneratedMessage) {
+            this.protoFormat();
+            return;
+        }
+     
+        for (Formats f : Formats.values()) {
+            // if (f.getFileFormat().matches(this.uncompressedPath)) {
+            FileFormat fileFormat = f.getFileFormat();
+            if (fileFormat.matches(this)) {
+                this.setFormat(f);
+                break;
+            }
+        }
+        // set default
+    	if (this.getFormat().equals(Formats.UNKNOWN_FORMAT)) {
+    		// open file, read first couple lines
+    	    //this.setFormat(Formats.AVRO_FORMAT);
+    	}
+    }
+
+    /**
+     * Based on path name, determine if file is compressed
+     */
+    protected void determineCompression() {
+        if (null != path) {
+            if (this.path.endsWith(Compressions.GZIP_COMPRESSION
+                    .fileExtension())) {
+                this.isCompressed = true;
+                setCompression(Compressions.GZIP_COMPRESSION);
+                this.setUncompressedPath(this.path.replaceAll(".gz$", ""));
+            } else {
+                this.setUncompressedPath(path);
+            }
+        }
+    }
+
+    public Pipe<T> setCompression(Compressions compression) {
+    	this.isCompressed = true;
+    	this.compression = compression;
+    	return this;
+    	
+    }
+
+    public boolean isCompressed() {
+        return isCompressed;
+    }
+
+    protected void init() {
+        determineCompression();
+    	determineFormat();
     }
 }
