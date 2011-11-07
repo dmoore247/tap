@@ -25,7 +25,6 @@ import junit.framework.Assert;
 import org.junit.Test;
 
 import tap.core.Pipe;
-import tap.core.TapPipe;
 import tap.formats.Formats;
 import tap.formats.tapproto.Testmsg;
 import tap.formats.tapproto.Testmsg.TestMsg;
