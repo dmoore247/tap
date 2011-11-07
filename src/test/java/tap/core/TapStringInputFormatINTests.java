@@ -12,7 +12,7 @@ import tap.core.AssemblyTests.Mapper;
 import tap.core.AssemblyTests.Reducer;
 import tap.formats.Formats;
 
-public class TapStringInputFormat {
+public class TapStringInputFormatINTests {
 
     @Test
     public void wordCountIntuitStringIN() {
